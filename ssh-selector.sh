@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="SSH Connection Selector"
-VERSION="v2.3.1"
+VERSION="v2.3.2"
 AUTHOR="Aung Myat Thu / w01f"
 
 SSH_DIR="$HOME/.ssh"
@@ -41,7 +41,7 @@ SERVERS=(
     "6|Server 6|user6|server6.example.com|22|key|id_ed25519"
     "7|Server 7|user7|server7.example.com|22|key|id_ed25519"
     "8|Server 8|user8|server8.example.com|22|key|id_ed25519"
-    "9|Password Server|user9|server9.example.com|22|password|"
+    "9|Server 9|user9|server9.example.com|22|prompt|"
 )
 
 center_line() {
@@ -89,6 +89,20 @@ check_key() {
     chmod 600 "$key_path" 2>/dev/null || true
 }
 
+auth_label() {
+    case "$1" in
+        key)
+            printf "key"
+            ;;
+        prompt)
+            printf "secure"
+            ;;
+        *)
+            printf "unknown"
+            ;;
+    esac
+}
+
 hacker_loader() {
     local target="$1"
 
@@ -119,12 +133,14 @@ show_menu() {
     printf "%sSelect a server to connect:%s\n" "$YELLOW" "$NC"
     echo
 
-    local item id name user host port auth key
+    local item id name user host port auth key label
 
     for item in "${SERVERS[@]}"; do
         IFS="|" read -r id name user host port auth key <<< "$item"
+        label="$(auth_label "$auth")"
+
         printf " %s) %-16s %-8s %s%s@%s:%s%s\n" \
-            "$id" "$name" "[$auth]" "$CYAN" "$user" "$host" "$port" "$NC"
+            "$id" "$name" "[$label]" "$CYAN" "$user" "$host" "$port" "$NC"
     done
 
     echo
@@ -137,7 +153,7 @@ show_menu() {
 list_servers() {
     printf "%s%s Servers%s\n\n" "$BOLD" "$APP_NAME" "$NC"
 
-    local item id name user host port auth key key_display
+    local item id name user host port auth key key_display label
 
     printf "%-4s %-18s %-18s %-32s %-8s %-10s %-16s\n" \
         "ID" "Name" "User" "Host" "Port" "Auth" "Key"
@@ -145,15 +161,16 @@ list_servers() {
 
     for item in "${SERVERS[@]}"; do
         IFS="|" read -r id name user host port auth key <<< "$item"
+        label="$(auth_label "$auth")"
 
-        if [[ "$auth" == "password" ]]; then
+        if [[ "$auth" == "prompt" ]]; then
             key_display="-"
         else
             key_display="$key"
         fi
 
         printf "%-4s %-18s %-18s %-32s %-8s %-10s %-16s\n" \
-            "$id" "$name" "$user" "$host" "$port" "$auth" "$key_display"
+            "$id" "$name" "$user" "$host" "$port" "$label" "$key_display"
     done
 
     echo
@@ -211,7 +228,7 @@ connect_ssh() {
                 "${user}@${host}"
             )
             ;;
-        password)
+        prompt)
             ssh_cmd=(
                 ssh
                 -p "$port"
@@ -226,7 +243,7 @@ connect_ssh() {
             )
             ;;
         *)
-            printf "%sError: invalid auth type '%s'. Use 'key' or 'password'.%s\n" "$RED" "$auth" "$NC"
+            printf "%sError: invalid auth type '%s'. Use 'key' or 'prompt'.%s\n" "$RED" "$auth" "$NC"
             return 1
             ;;
     esac
@@ -234,19 +251,21 @@ connect_ssh() {
     echo
     printf "%sSelected:%s %s\n" "$GREEN" "$NC" "$name"
     printf "%s%s@%s:%s%s\n" "$CYAN" "$user" "$host" "$port" "$NC"
-    printf "%sAuth: %s%s\n" "$DIM" "$auth" "$NC"
 
     if [[ "$auth" == "key" ]]; then
+        printf "%sAuth: key%s\n" "$DIM" "$NC"
         printf "%sKey: %s%s\n" "$DIM" "$key_path" "$NC"
     else
-        printf "%sPassword will be requested by SSH. Password is not saved in this script.%s\n" "$YELLOW" "$NC"
+        printf "%sAuth: secure prompt%s\n" "$DIM" "$NC"
+        printf "%sPassword input will be hidden by SSH.%s\n" "$YELLOW" "$NC"
+        printf "%sPassword is not saved, printed, or logged by this script.%s\n" "$YELLOW" "$NC"
     fi
 
     printf "%sTTY Mode: enabled. ssh -T is not used.%s\n" "$YELLOW" "$NC"
 
     if [[ "$DRY_RUN" -eq 1 ]]; then
         echo
-        printf "%sDry run mode. SSH command:%s\n" "$YELLOW" "$NC"
+        printf "%sDry run mode. No password will be printed.%s\n" "$YELLOW" "$NC"
         printf "%q " "${ssh_cmd[@]}"
         echo
         return 0
@@ -289,14 +308,14 @@ Server format:
 
 Auth types:
   key
-  password
+  prompt
 
 Examples:
   ssh-selector.sh
   ssh-selector.sh 4
   ssh-selector.sh "Server 4"
   ssh-selector.sh --dry-run 9
-  ssh-selector.sh --no-hacker "Password Server"
+  ssh-selector.sh --no-hacker "Server 9"
 EOF
 }
 
@@ -370,4 +389,5 @@ main() {
         esac
     done
 }
+
 main "$@"
