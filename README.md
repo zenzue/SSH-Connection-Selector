@@ -120,7 +120,7 @@ So SSH opens as a normal interactive terminal session.
 Create the script file:
 
 ```bash
-nano ~/.ssh/ssh-selector.sh
+vim ~/.ssh/ssh-selector.sh
 ```
 
 Paste the script content, then save it.
